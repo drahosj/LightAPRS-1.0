@@ -31,21 +31,21 @@
 //#define DEVMODE // Development mode. Uncomment to enable for debugging.
 
 //****************************************************************************
-char  CallSign[7]="NOCALL"; //DO NOT FORGET TO CHANGE YOUR CALLSIGN
+char  CallSign[7]="WN0NW"; //DO NOT FORGET TO CHANGE YOUR CALLSIGN
 int   CallNumber=11; //SSID http://www.aprs.org/aprs11/SSIDs.txt
 char  Symbol='O'; // '/O' for balloon, '/>' for car, for more info : http://www.aprs.org/symbols/symbols-new.txt
 bool alternateSymbolTable = false ; //false = '/' , true = '\'
 
-char Frequency[9]="144.3900"; //default frequency. 144.3900 for US, 144.8000 for Europe
+char Frequency[9]="144.420"; //default frequency. 144.3900 for US, 144.8000 for Europe
 
 char comment[50] = "http://www.lightaprs.com"; // Max 50 char
 char StatusMessage[50] = "LightAPRS by TA9OHC & TA2MUN"; 
 //*****************************************************************************
 
 
-unsigned int   BeaconWait=60;  //seconds sleep for next beacon (TX).
-unsigned int   BattWait=60;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
-float BattMin=4.5;        // min Volts to wake up.
+unsigned int   BeaconWait=10;  //seconds sleep for next beacon (TX).
+unsigned int   BattWait=10;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
+float BattMin=6.4;        // min Volts to wake up.
 float DraHighVolt=8.0;    // min Volts for radio module (DRA818V) to transmit (TX) 1 Watt, below this transmit 0.5 Watt. You don't need 1 watt on a balloon. Do not change this.
 //float GpsMinVolt=4.0; //min Volts for GPS to wake up. (important if power source is solar panel) 
 

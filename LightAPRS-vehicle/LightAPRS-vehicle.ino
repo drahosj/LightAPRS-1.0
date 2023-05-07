@@ -31,20 +31,20 @@
 //#define DEVMODE // Development mode. Uncomment to enable for debugging.
 
 //****************************************************************************
-char  CallSign[7]="NOCALL"; //DO NOT FORGET TO CHANGE YOUR CALLSIGN
+char  CallSign[7]="WN0NW"; //DO NOT FORGET TO CHANGE YOUR CALLSIGN
 int   CallNumber=9; //SSID http://www.aprs.org/aprs11/SSIDs.txt
-char  Symbol='>'; // '/>' for car, '/k' for truck, for more info : http://www.aprs.org/symbols/symbols-new.txt
+char  Symbol='O'; // '/>' for car, '/k' for truck, for more info : http://www.aprs.org/symbols/symbols-new.txt
 bool alternateSymbolTable = false ; //false = '/' , true = '\'
 
-char Frequency[9]="144.3900"; //default frequency. 144.3900 for US, 144.8000 for Europe
+char Frequency[9]="144.4200"; //default frequency. 144.3900 for US, 144.8000 for Europe
 
 char comment[50] = "http://www.lightaprs.com"; // Max 50 char
 char StatusMessage[50] = "LightAPRS by TA9OHC & TA2MUN"; 
 //*****************************************************************************
 
 
-unsigned int   BeaconWait=60;  //seconds sleep for next beacon (TX).
-unsigned int   BattWait=60;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
+unsigned int   BeaconWait=10;  //seconds sleep for next beacon (TX).
+unsigned int   BattWait=15;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
 float BattMin=4.5;        // min Volts to wake up.
 float DraHighVolt=8.0;    // max Volts for radio module (DRA818V) to transmit (TX) 1 Watt, above this transmit 0.5 Watt. Do not increase this value to avoid overheating.
 float GpsMinVolt=4.0; //min Volts for GPS to wake up. (important if power source is solar panel) 
@@ -540,5 +540,3 @@ static void printStr(const char *str, int len)
     Serial.print(i < slen ? str[i] : ' ');
 #endif
 }
-
-
