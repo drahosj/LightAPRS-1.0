@@ -184,10 +184,7 @@ void loop() {
       static long baseAlt;
       static int baseAltStabilized;
       
-      /* In flight determined by stabilized base alt and current alt 100 above base alt */
-      int inFlight = baseAltStabilized && ((alt - 100) > baseAlt);
-
-
+     
       #define BASE_ALT_WINDOW 16
       static long baseAltArray[BASE_ALT_WINDOW];
       static int baseAltIndex;
@@ -214,10 +211,22 @@ void loop() {
         baseAlt = baseAlt / BASE_ALT_WINDOW;
       }
 
+      /* In flight determined by stabilized base alt and current alt 100 above base alt */
+      int inFlight = baseAltStabilized && ((alt - 100) > baseAlt);
+
+
       static unsigned int gpsCount;
       #ifdef DEVMODE
       Serial.printf("GPS update count: %u\n", gpsCount);
       #endif
+
+      #ifdef DEVMODE
+      if (gpsCount > 22 && gpsCount < 60) {
+        Serial.println("Entering DEVMODE simulated flight");
+        inFlight = 1;
+      }
+      #endif
+      
       /* When in flight, always send location packet. Otherwise send every N while in flight */
       if (inFlight || !(gpsCount++ % IdleFreq)) {
         #ifdef DEVMODE
@@ -239,7 +248,7 @@ void loop() {
           int delayCount = 0;
           /* Remain in ascent mode (rapid baro sampling) for AscentTime */
           for (int i = 0; i < AscentTime * 4; i++) {
-            barAlt = bmp.readAltitude(29.97f);
+            barAlt = bmp.readAltitude() * 3.28f;
             if (barAlt > maxBarAlt) {
               maxBarAlt = barAlt;
             }
