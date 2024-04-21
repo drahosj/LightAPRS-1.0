@@ -28,7 +28,7 @@
 #define AprsPinInput  pinMode(12,INPUT);pinMode(13,INPUT);pinMode(14,INPUT);pinMode(15,INPUT)
 #define AprsPinOutput pinMode(12,OUTPUT);pinMode(13,OUTPUT);pinMode(14,OUTPUT);pinMode(15,OUTPUT)
 
-//#define DEVMODE // Development mode. Uncomment to enable for debugging.
+#define DEVMODE // Development mode. Uncomment to enable for debugging.
 
 //****************************************************************************
 char  CallSign[7]="WN0NW"; //DO NOT FORGET TO CHANGE YOUR CALLSIGN
@@ -39,11 +39,13 @@ bool alternateSymbolTable = false ; //false = '/' , true = '\'
 char Frequency[9]="144.420"; //default frequency. 144.3900 for US, 144.8000 for Europe
 
 char comment[50] = "http://www.lightaprs.com"; // Max 50 char
-char StatusMessage[50] = "LightAPRS by TA9OHC & TA2MUN"; 
+char StatusMessage[] = "LightAPRS by TA9OHC & TA2MUN - Rocket hack by WN0NW"; 
+
+int IdleFreq = 10; //Transmit location and telemetry every N GPS reads when idle
+int AscentTime = 15; //Maximum time to stay in ascent mode
+
 //*****************************************************************************
 
-
-unsigned int   BeaconWait=10;  //seconds sleep for next beacon (TX).
 unsigned int   BattWait=10;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
 float BattMin=6.4;        // min Volts to wake up.
 float DraHighVolt=8.0;    // min Volts for radio module (DRA818V) to transmit (TX) 1 Watt, below this transmit 0.5 Watt. You don't need 1 watt on a balloon. Do not change this.
@@ -94,7 +96,7 @@ void setup() {
   Serial.begin(57600);
   Serial1.begin(9600);
 #if defined(DEVMODE)
-  Serial.println(F("Start"));
+  Serial.println(F("\n\n\n\n====== Start ======"));
 #endif
       
   APRS_init(ADC_REFERENCE, OPEN_SQUELCH);
@@ -135,15 +137,29 @@ void loop() {
       aliveStatus = false;
       
    }
+
+   
+    /* Baro pressure */
+    static long maxBarAlt;
+    long barAlt = long(trunc(bmp.readAltitude() * 3.28f));
+    if (barAlt > maxBarAlt) {
+      maxBarAlt = barAlt;
+    }
+
+    #ifdef DEVMODE
+    Serial.printf("Baro pressure (ft) current/max: %ld %ld\n", barAlt, maxBarAlt);
+    #endif
     
     updateGpsData(1000);
     gpsDebug();
 
     
     if ((gps.location.age() < 1000 || gps.location.isUpdated()) && gps.location.isValid()) {
+      #ifdef DEVMODE
+      Serial.println("\n\n-= GPS Stable - Updating cached telemetry =-\n");
+      #endif
       if (gps.satellites.isValid() && (gps.satellites.value() > 3)) {
       updatePosition();
-      updateTelemetry();
       
       //GpsOFF;
       setGPS_PowerSaveMode();
@@ -156,19 +172,109 @@ void loop() {
             //use defualt settings  
             APRS_setPathSize(pathSize);
         }
+
+      long alt = gps.altitude.feet();
       
-      //send status message every 60 minutes
-      if(gps.time.minute() == 30){               
-        sendStatus();       
+      static unsigned long maxAlt;
+      /* Update max alt every time */
+      if (gps.altitude.feet() > maxAlt) {
+        maxAlt = alt;
+      }
+
+      static long baseAlt;
+      static int baseAltStabilized;
+      
+      /* In flight determined by stabilized base alt and current alt 100 above base alt */
+      int inFlight = baseAltStabilized && ((alt - 100) > baseAlt);
+
+
+      #define BASE_ALT_WINDOW 16
+      static long baseAltArray[BASE_ALT_WINDOW];
+      static int baseAltIndex;
+      
+      /* Sliding window for base altitude */
+      baseAltArray[baseAltIndex++] = alt;
+
+      /* Handle rollover */
+      if (baseAltIndex >= BASE_ALT_WINDOW) {
+        baseAltIndex = 0;
+        baseAltStabilized = 1;
+      }
+
+      /* Average */
+      if (baseAltStabilized) {
+        for (int i = 0; i < BASE_ALT_WINDOW; i++) {
+          baseAlt += baseAltArray[i];
+        }
+        baseAlt = baseAlt / BASE_ALT_WINDOW;
       } else {
+        for (int i = 0; i < baseAltIndex; i++) {
+          baseAlt += baseAltArray[i];
+        }
+        baseAlt = baseAlt / BASE_ALT_WINDOW;
+      }
 
-         sendLocation();
+      static unsigned int gpsCount;
+      #ifdef DEVMODE
+      Serial.printf("GPS update count: %u\n", gpsCount);
+      #endif
+      /* When in flight, always send location packet. Otherwise send every N while in flight */
+      if (inFlight || !(gpsCount++ % IdleFreq)) {
+        #ifdef DEVMODE
+        Serial.printf("\n -= Location beacon %s=-\n", inFlight ? "* IN FLIGHT *" : "");
+        #endif
 
+        snprintf(comment, 45, "%ldft%s %ldft %ldft %ldft",
+            baseAlt, baseAltStabilized ? "" : "*", maxAlt, maxBarAlt, barAlt);
+        #ifdef DEVMODE
+        Serial.printf("Comment: %s\n", comment);
+        #endif
+
+        /* Go into ascent mode */
+        static int ascentComplete;  
+        if (inFlight && !ascentComplete) {
+          #ifdef DEVMODE
+          Serial.println("In ascent mode");
+          #endif
+          int delayCount = 0;
+          /* Remain in ascent mode (rapid baro sampling) for AscentTime */
+          for (int i = 0; i < AscentTime * 4; i++) {
+            barAlt = bmp.readAltitude(29.97f);
+            if (barAlt > maxBarAlt) {
+              maxBarAlt = barAlt;
+            }
+            #ifdef DEVMODE
+            Serial.printf("Ascent mode alt: %ld / %ld\n", barAlt, maxBarAlt);
+            #endif
+            /* Terminate early on 6 consecuritve samples of decreasing altitude */
+            if (barAlt < maxBarAlt) {
+              delayCount++;
+              if (delayCount > 6) {
+                break;
+              }
+            } else {
+              delayCount = 0;
+            }
+            
+            delay(250);
+          }
+          #ifdef DEVMODE
+          Serial.println("Exiting ascent mode");
+          #endif
+          ascentComplete = 1;
+        }
+
+        
+        updateTelemetry();
+        sendLocation();
+
+      #ifdef DEVMODE
+      Serial.println("Done handling GPS update");
+      #endif
       }
 
       freeMem();
       Serial.flush();
-      sleepSeconds(BeaconWait);
 
       } else {
 #if defined(DEVMODE)
@@ -181,7 +287,9 @@ void loop() {
     sleepSeconds(BattWait);
     
   }
-  
+  #ifdef DEVMODE
+  Serial.println("Exiting loop");
+  #endif
 }
 
 void aprs_msg_callback(struct AX25Msg *msg) {
@@ -364,6 +472,7 @@ void sendLocation() {
   RfPttOFF;
   RfOFF;
 #if defined(DEVMODE)
+  Serial.printf("Telemetry string: %s\n", telemetry_buff);
   Serial.println(F("Location sent with comment"));
 #endif
 
@@ -379,6 +488,10 @@ void sendStatus() {
   RfPttON;
   delay(1000);
     
+  #if defined(DEVMODE)
+  Serial.printf("Status message: %s\n", StatusMessage);
+  #endif
+  
   APRS_sendStatus(StatusMessage, strlen(StatusMessage));
 
   while(digitalRead(1)){;}//LibAprs TX Led pin PB1
